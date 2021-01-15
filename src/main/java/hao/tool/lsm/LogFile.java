@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 //@BenchmarkMode(Mode.AverageTime)
 //@OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -23,18 +24,37 @@ import java.util.concurrent.TimeUnit;
 public class LogFile {
 
     private Path path;
+    private long size;
     private File file;
 
     public enum Mode {
         PATH, FILE
     }
 
+    public static LogFile create(String absolutePath) {
+        return new LogFile(absolutePath);
+    }
+
+    public LogFile(String fileName) {
+        this(fileName, Mode.PATH);
+    }
+
     public LogFile(String fileName, Mode mode) {
-        if (mode.equals(Mode.PATH)) {
-            path = Paths.get(fileName);
-        } else {
-            file = new File(fileName);
+        try {
+            if (mode.equals(Mode.PATH)) {
+                path = Paths.get(fileName);
+                File f = path.toFile();
+                if (f.exists()) {
+                    f.delete();
+                }
+                f.createNewFile();
+            } else {
+                file = new File(fileName);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+        size = 0;
     }
 
     public long pathWrite(String content) {
@@ -42,6 +62,7 @@ public class LogFile {
             content += System.lineSeparator();
             byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
             Files.write(path, bytes, StandardOpenOption.APPEND);
+            size++;
             return bytes.length;
         } catch (IOException e) {
             e.printStackTrace();
@@ -57,6 +78,36 @@ public class LogFile {
             e.printStackTrace();
         }
         return "";
+    }
+
+    public long size() {
+        return size;
+    }
+
+    public String getFileName() {
+        return path.toFile().getAbsolutePath();
+    }
+
+    public Stream<String> lines() throws IOException {
+        return Files.lines(path);
+    }
+
+    public void delete() throws IOException {
+        if (path != null && !path.toFile().delete()) {
+            throw new IOException("Failed to delete " + path.toFile().getAbsolutePath());
+        }
+    }
+
+    public boolean renameTo(String newName) {
+        File newFile = new File(newName);
+        boolean result = false;
+        if (!newFile.exists()) {
+            result = path.toFile().renameTo(newFile);
+            if (result) {
+                path = newFile.toPath();
+            }
+        }
+        return result;
     }
 
     /* This way is too slow
